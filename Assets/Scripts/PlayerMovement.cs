@@ -194,10 +194,11 @@ public class PlayerMovement : MonoBehaviour
             ls.x *= -1f;
             transform.localScale = ls;
 
-            if (rb.linearVelocity.y == 0f)
+            if(rb.linearVelocity.x == 0)
             {
                 smokeFX.Play();
-            }  
+            }
+                
         }
     }
     private void OnDrawGizmosSelected()
