@@ -1,4 +1,4 @@
-using Unity.VisualScripting;
+﻿using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 public class PlayerMovement : MonoBehaviour
@@ -21,7 +21,7 @@ public class PlayerMovement : MonoBehaviour
     public Transform groundCheckPos;
     public Vector2 groundCheckSize = new Vector2(0.5f, 0.04f);
     public LayerMask groundLayer;
-    bool isGrounded = true;
+    bool isGrounded;
 
     [Header("Gravity")]
     public float baseGravity = 2f;
@@ -126,20 +126,44 @@ public class PlayerMovement : MonoBehaviour
 
     public void Jump(InputAction.CallbackContext context)
     {
-        if (jumpRemaining > 0)
+        //if (jumpRemaining > 0)
+        //{
+        //    if (context.performed)
+        //    {
+        //        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
+        //        jumpRemaining--;
+        //        JumpFX();
+        //    }
+        //    else if (context.canceled)
+        //    {
+        //        rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
+        //        jumpRemaining--;
+        //        JumpFX();
+        //    }
+        //}
+        if (context.performed && jumpRemaining > 0)
         {
-            if (context.performed)
+            // Khi còn 2 lượt: đây là cú nhảy đầu.
+            // Khi còn 1 lượt: đây là cú nhảy đôi.
+            if (jumpRemaining == maxJumps)
             {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
-                jumpRemaining--;
                 JumpFX();
             }
-            else if (context.canceled)
+            else
             {
-                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
-                jumpRemaining--;
-                JumpFX();
+                DoubleJumpFX();
             }
+
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
+            jumpRemaining--;
+        } 
+        else if (context.canceled && rb.linearVelocity.y > 0f)
+        {
+            // Thả Space sớm: giảm độ cao cú nhảy, không kích hoạt Double Jump.
+            rb.linearVelocity = new Vector2(
+                rb.linearVelocity.x,
+                rb.linearVelocity.y * 0.5f
+            );
         }
 
         // wall jump
@@ -167,17 +191,32 @@ public class PlayerMovement : MonoBehaviour
         smokeFX.Play();
     }
 
+    private void DoubleJumpFX()
+    {
+        animator.SetTrigger("doubleJump");
+        smokeFX.Play();
+    }
+
     private void GroundCheck()
     {
-        if (Physics2D.OverlapBox(groundCheckPos.position, groundCheckSize, 0f, groundLayer))
+        //if (Physics2D.OverlapBox(groundCheckPos.position, groundCheckSize, 0f, groundLayer))
+        //{
+        //    jumpRemaining = maxJumps;
+        //    isGrounded = true;
+        //}
+        //else
+        //{
+        //    isGrounded = false;
+        //}
+        bool groundedNow = Physics2D.OverlapBox(groundCheckPos.position, groundCheckSize, 0f, groundLayer);
+
+        // Chỉ nạp lại lượt nhảy khi vừa chạm đất.
+        if (groundedNow && !isGrounded)
         {
             jumpRemaining = maxJumps;
-            isGrounded = true;
         }
-        else
-        {
-            isGrounded = false;
-        }
+
+        isGrounded = groundedNow;
     }
 
     private bool WallCheck()
