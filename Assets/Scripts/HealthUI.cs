@@ -12,12 +12,18 @@ public class HealthUI : MonoBehaviour
 
     public void SetMaxHearts(int maxHearts)
     {
-        foreach (Image heart in hearts)
+        for (int i = hearts.Count - 1; i >= 0; i--)
         {
-            Destroy(heart.gameObject);
+            if (hearts[i] != null) Destroy(hearts[i].gameObject);
         }
 
         hearts.Clear();
+
+        if (heartPrefab == null)
+        {
+            Debug.LogError("HealthUI chưa được gán Heart Prefab.", this);
+            return;
+        }
 
         for (int i = 0; i < maxHearts; i++)
         {
@@ -31,6 +37,7 @@ public class HealthUI : MonoBehaviour
     {
         for (int i = 0; i < hearts.Count; i++)
         {
+            if (hearts[i] == null) continue;
             if (i < currentHealth)
             {
                 hearts[i].sprite = fullHeartSprite;

@@ -13,6 +13,8 @@ GameObject:
   - component: {fileID: 3257824981683364346}
   - component: {fileID: 8885465558249658375}
   - component: {fileID: 734084544079065102}
+  - component: {fileID: -5559613782462141680}
+  - component: {fileID: -6541691053516590436}
   m_Layer: 0
   m_Name: Enemy
   m_TagString: Untagged
@@ -185,3 +187,44 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 8
+  damage: 1
+  maxHealth: 3
+  lootTable:
+  - itemPrefab: {fileID: 6617642022224576788, guid: ff41e92d94130eb4e936776b3ca6e49b, type: 3}
+    dropChange: 50
+  - itemPrefab: {fileID: 6617642022224576788, guid: 47a0d2008da0ee1428c7f00ded9cd8ea, type: 3}
+    dropChange: 50
+--- !u!95 &-5559613782462141680
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5392852107825787081}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 9100000, guid: e2debb074ec9fa94091e683aa0af4edc, type: 2}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &-6541691053516590436
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5392852107825787081}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b8149e6cfaedd94a8a7ef990e674c3e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EnemyAnimation

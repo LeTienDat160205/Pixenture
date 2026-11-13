@@ -14,10 +14,14 @@ public class PlayerHealth : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        currentHealth = maxHealth;
-        healthUI.SetMaxHearts(maxHealth);
-
         animator = GetComponent<Animator>();
+        ResetHealth();
+        GameController.OnReset += ResetHealth;
+    }
+
+    private void OnDestroy()
+    {
+        GameController.OnReset -= ResetHealth;
     }
 
     private void OnTriggerEnter2D(Collider2D collision)
@@ -26,20 +30,30 @@ public class PlayerHealth : MonoBehaviour
         if (enemy)
         {
             TakeDamage(enemy.damage);
+            SoundEffectManager.Play("Hit");
         }
+    }
+
+    void ResetHealth()
+    {
+        currentHealth = maxHealth;
+        if (healthUI != null) healthUI.SetMaxHearts(maxHealth);
+        else Debug.LogError("PlayerHealth chưa được gán HealthUI.", this);
     }
 
     private void TakeDamage(int damage)
     {
+        if (currentHealth <= 0) return;
         currentHealth -= damage;
-        healthUI.UpdateHearts(currentHealth);
+        if (healthUI != null) healthUI.UpdateHearts(currentHealth);
 
-        animator.Play("Base Layer.Hit", 0, 0f);
+        if (animator != null) animator.Play("Base Layer.Hit", 0, 0f);
 
         if (currentHealth <= 0)
         {
             //player dead! -- call game over, animation, etc
-            OnPlayedDied.Invoke();
+            SoundEffectManager.Play("Die");
+            OnPlayedDied?.Invoke();
         }
     }
 

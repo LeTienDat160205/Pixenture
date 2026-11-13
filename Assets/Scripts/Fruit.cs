@@ -8,6 +8,7 @@ public class Fruit : MonoBehaviour, IItem
     public void Collect()
     {
         OnFuitCollect.Invoke(worth);
+        SoundEffectManager.Play("Fruit");
         Destroy(gameObject);
     }
 

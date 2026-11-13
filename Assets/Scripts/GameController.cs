@@ -1,4 +1,3 @@
-﻿using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using TMPro;
@@ -7,75 +6,134 @@ using UnityEngine.UI;
 
 public class GameController : MonoBehaviour
 {
-    int processAmount;
+    private int processAmount;
     public Slider processSlider;
 
     public GameObject player;
     public GameObject LoadCanvas;
     public List<GameObject> levels;
-    private int currentLevelIndex = 0;
+    private int currentLevelIndex;
 
     public GameObject gameOverScreen;
     public TMP_Text survivedText;
     private int survivedLevelCount;
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+
+    public static event Action OnReset;
+
+    private void Start()
     {
         processAmount = 0;
-        processSlider.value = 0;
+        if (processSlider != null) processSlider.value = 0;
+
+        Fruit.OnFuitCollect -= IncreaseProcessAmount;
         Fruit.OnFuitCollect += IncreaseProcessAmount;
+        HoldToLoadLevel.OnHoldComplete -= LoadNextLevel;
         HoldToLoadLevel.OnHoldComplete += LoadNextLevel;
+        PlayerHealth.OnPlayedDied -= GameOverScreen;
         PlayerHealth.OnPlayedDied += GameOverScreen;
-        LoadCanvas.SetActive(false);
-        gameOverScreen.SetActive(false);
+
+        if (LoadCanvas != null) LoadCanvas.SetActive(false);
+        if (gameOverScreen != null) gameOverScreen.SetActive(false);
+
+        // Đồng bộ chỉ số với level đang active khi khởi tạo.
+        int activeIndex = FindActiveLevelIndex();
+        if (activeIndex >= 0) currentLevelIndex = activeIndex;
     }
 
-    void GameOverScreen()
+    private void GameOverScreen()
     {
-        gameOverScreen.SetActive(true);
-        survivedText.text = "You survived " + survivedLevelCount + " level";
-        if(survivedLevelCount != 1)
-        {
-            survivedText.text += "s";
-        } 
+        if (gameOverScreen != null) gameOverScreen.SetActive(true);
+        MusicManager.PauseBackgroundMusic();
+        if (survivedText != null)
+            survivedText.text = "You survived " + survivedLevelCount + (survivedLevelCount == 1 ? " level" : " levels");
+        Time.timeScale = 0f;
     }
 
-    void IncreaseProcessAmount(int amount)
+    public void ResetGame()
+    {
+        Time.timeScale = 1f;
+        if (gameOverScreen != null) gameOverScreen.SetActive(false);
+        MusicManager.PlayBackgroundMusic(false);
+        survivedLevelCount = 0;
+        if (!SetActiveLevel(0)) return;
+        ResetLevelProgress();
+        if (player != null) player.transform.position = Vector3.zero;
+        if (LoadCanvas != null) LoadCanvas.SetActive(false);
+
+        OnReset?.Invoke();
+    }
+
+    private void IncreaseProcessAmount(int amount)
     {
         processAmount += amount;
-        processSlider.value = processAmount;
-        if (processAmount >= 100)
+        if (processSlider != null) processSlider.value = processAmount;
+        if (processAmount >= 100 && LoadCanvas != null)
         {
-            // Level up
             LoadCanvas.SetActive(true);
             Debug.Log("Level Up!");
         }
     }
 
-    void LoadNextLevel()
+    private void LoadLevel(int level, bool wantSurvivedIncrease)
     {
-        int nextLevelIndex = (currentLevelIndex == levels.Count - 1) ? 0 : currentLevelIndex + 1;
-        LoadCanvas.SetActive(false);
+        if (!SetActiveLevel(level)) return;
 
-        levels[currentLevelIndex].gameObject.SetActive(false);
-        levels[nextLevelIndex].gameObject.SetActive(true);
+        if (wantSurvivedIncrease) SoundEffectManager.Play("LevelComplete");
 
-        player.transform.position = new Vector3(0, 0, 0);
+        if (LoadCanvas != null) LoadCanvas.SetActive(false);
+        if (player != null) player.transform.position = Vector3.zero;
+        ResetLevelProgress();
 
-        currentLevelIndex = nextLevelIndex;
-        processAmount = 0;
-        processSlider.value = 0;
         survivedLevelCount++;
+        if (wantSurvivedIncrease) survivedLevelCount++;
     }
-    // được thêm bơi AI khắc phục lỗi không phá hủy sự kiện khi GameController bị hủy
-    public void OnDestroy()
+
+    private bool SetActiveLevel(int level)
+    {
+        if (levels == null || levels.Count == 0 || level < 0 || level >= levels.Count || levels[level] == null)
+        {
+            Debug.LogError("GameController: level index/list không hợp lệ hoặc level chưa được gán.", this);
+            return false;
+        }
+
+        // Tắt tất cả trước khi bật level đích, không phụ thuộc currentLevelIndex.
+        for (int i = 0; i < levels.Count; i++)
+        {
+            if (levels[i] != null) levels[i].SetActive(false);
+        }
+
+        levels[level].SetActive(true);
+        currentLevelIndex = level;
+        return true;
+    }
+
+    private void ResetLevelProgress()
+    {
+        processAmount = 0;
+        if (processSlider != null) processSlider.value = 0;
+    }
+
+    private int FindActiveLevelIndex()
+    {
+        if (levels == null) return -1;
+        for (int i = 0; i < levels.Count; i++)
+        {
+            if (levels[i] != null && levels[i].activeSelf) return i;
+        }
+        return -1;
+    }
+
+    private void LoadNextLevel()
+    {
+        if (levels == null || levels.Count == 0) return;
+        int nextLevelIndex = (currentLevelIndex + 1) % levels.Count;
+        LoadLevel(nextLevelIndex, true);
+    }
+
+    private void OnDestroy()
     {
         Fruit.OnFuitCollect -= IncreaseProcessAmount;
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
+        HoldToLoadLevel.OnHoldComplete -= LoadNextLevel;
+        PlayerHealth.OnPlayedDied -= GameOverScreen;
     }
 }

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Enemy : MonoBehaviour
@@ -13,21 +15,35 @@ public class Enemy : MonoBehaviour
     private bool shouldJump;
 
     public int damage = 1;
+
+    public int maxHealth = 3;
+    private int currentHealth;
+    private EnemyAnimation enemyAnimation;
+    private bool isDead;
+
+    // lootTable
+    [Header("Loot")]
+    public List<LootItem> lootTable = new List<LootItem>();
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         player = GameObject.FindGameObjectWithTag("Player").GetComponent<Transform>();
+        enemyAnimation = GetComponent<EnemyAnimation>();
+        currentHealth = maxHealth;
     }
 
     // Update is called once per frame
     void Update()
     {
         // is grounded?
+        if (player == null || rb == null) return;
+
         isGrounded = Physics2D.Raycast(transform.position, Vector2.down, 1f, groundLayer);
 
         //player direction
         float direction = Mathf.Sign(player.position.x - transform.position.x);
+        if (enemyAnimation != null) enemyAnimation.SetFacingDirection(direction);
 
         //player above detection
         bool isPlayerAbove = Physics2D.Raycast(transform.position, Vector2.up, 5f, 1 << player.gameObject.layer);
@@ -66,6 +82,46 @@ public class Enemy : MonoBehaviour
             Vector2 direaction = (player.position - transform.position).normalized;
             Vector2 jumpDirection = direaction * jumpForce;
             rb.AddForce(new Vector2(jumpDirection.x, jumpForce), ForceMode2D.Impulse);
+        }
+    }
+
+    public void TakeDamage(int damage)
+    {
+        if (isDead) return;
+
+        currentHealth -= damage;
+        if (enemyAnimation != null) enemyAnimation.PlayHit();
+        if(currentHealth <= 0)
+        {
+            isDead = true;
+            Die();
+        }
+    }
+
+    void Die()
+    {
+        SoundEffectManager.Play("Die");
+
+        // go to lootTable
+        // spawn item
+
+        foreach (LootItem lootItem in lootTable)
+        {
+            if (lootItem == null || lootItem.itemPrefab == null) continue;
+
+            if (Random.Range(0f, 100f) < Mathf.Clamp(lootItem.dropChange, 0f, 100f))
+            {
+                InstantiateLoot(lootItem.itemPrefab);
+            }
+        }
+        Destroy(gameObject);
+    }
+
+    void InstantiateLoot(GameObject loot)
+    {
+        if (loot)
+        {
+            Instantiate(loot, transform.position, Quaternion.identity);
         }
     }
 }

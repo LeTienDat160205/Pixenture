@@ -148,6 +148,7 @@ public class PlayerMovement : MonoBehaviour
             if (jumpRemaining == maxJumps)
             {
                 JumpFX();
+                SoundEffectManager.Play("Jump");
             }
             else
             {
@@ -173,6 +174,7 @@ public class PlayerMovement : MonoBehaviour
             rb.linearVelocity = new Vector2(wallJumpDirection * wallJumpPower.x, wallJumpPower.y);
             wallJumpTimer = 0f;
             JumpFX();
+            SoundEffectManager.Play("Jump");
 
             if (transform.localScale.x != wallJumpDirection)
             {
