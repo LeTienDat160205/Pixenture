@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 public class PlayerHealth : MonoBehaviour
@@ -8,6 +9,8 @@ public class PlayerHealth : MonoBehaviour
     public HealthUI healthUI;
 
     private Animator animator;
+
+    public static event Action OnPlayedDied;
     // Start is called before the first frame update
     void Start()
     {
@@ -36,6 +39,7 @@ public class PlayerHealth : MonoBehaviour
         if (currentHealth <= 0)
         {
             //player dead! -- call game over, animation, etc
+            OnPlayedDied.Invoke();
         }
     }
 

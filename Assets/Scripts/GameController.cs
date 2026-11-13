@@ -1,6 +1,7 @@
 ﻿using NUnit.Framework;
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,6 +14,10 @@ public class GameController : MonoBehaviour
     public GameObject LoadCanvas;
     public List<GameObject> levels;
     private int currentLevelIndex = 0;
+
+    public GameObject gameOverScreen;
+    public TMP_Text survivedText;
+    private int survivedLevelCount;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -20,10 +25,20 @@ public class GameController : MonoBehaviour
         processSlider.value = 0;
         Fruit.OnFuitCollect += IncreaseProcessAmount;
         HoldToLoadLevel.OnHoldComplete += LoadNextLevel;
+        PlayerHealth.OnPlayedDied += GameOverScreen;
         LoadCanvas.SetActive(false);
+        gameOverScreen.SetActive(false);
     }
 
-
+    void GameOverScreen()
+    {
+        gameOverScreen.SetActive(true);
+        survivedText.text = "You survived " + survivedLevelCount + " level";
+        if(survivedLevelCount != 1)
+        {
+            survivedText.text += "s";
+        } 
+    }
 
     void IncreaseProcessAmount(int amount)
     {
@@ -50,6 +65,7 @@ public class GameController : MonoBehaviour
         currentLevelIndex = nextLevelIndex;
         processAmount = 0;
         processSlider.value = 0;
+        survivedLevelCount++;
     }
     // được thêm bơi AI khắc phục lỗi không phá hủy sự kiện khi GameController bị hủy
     public void OnDestroy()
