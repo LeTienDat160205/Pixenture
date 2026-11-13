@@ -10,55 +10,94 @@ public class ObjectSpawner : MonoBehaviour
 
     public Tilemap tilemap;
     public GameObject[] objectPrefabs;
-    public float bananaProbability = 0.5f; // Probability of spawning a banana (0 to 1)
-    public float enemyProbability = 0.1f; // Probability of spawning an enemy (0 to 1)
-    public int maxObjects = 10; // Maximum number of objects to spawn
-    public float fruitLifeTime = 10f; // Time in seconds before a fruit disappears
-    public float spawnInterval = 0.5f; // Time in seconds between spawns
+    [Range(0f, 1f)] public float bananaProbability = 0.5f;
+    [Range(0f, 1f)] public float enemyProbability = 0.1f;
+    public int maxObjects = 10;
+    public float fruitLifeTime = 10f;
+    public float spawnInterval = 0.5f;
 
-    private List<Vector3> validSpawnPositions = new List<Vector3>();
-    private List<GameObject> spawnedObjects = new List<GameObject>();
-    private bool isSpawning = false;
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    [Header("Spawn placement")]
+    [SerializeField] private float fruitHalfHeight = 0.25f;
+    [SerializeField] private float enemyHalfHeight = 0.48f;
+    [SerializeField] private float surfacePadding = 0.03f;
+    [SerializeField] private float playerClearance = 1.5f;
+    [SerializeField] private float objectClearance = 1.25f;
+    [SerializeField] private string noSpawnObjectName = "NotSpawn";
+
+    private readonly List<Vector3> validSpawnPositions = new List<Vector3>();
+    private readonly List<GameObject> spawnedObjects = new List<GameObject>();
+    private readonly List<Collider2D> noSpawnColliders = new List<Collider2D>();
+    private bool isSpawning;
+
+    private void Start()
     {
-        GatherValidPositions();
-        StartCoroutine(SpawnObjectIfNeed());
         GameController.OnReset += LevelChange;
+        Tilemap activeGround = FindActiveGround();
+        if (activeGround != null)
+            tilemap = activeGround;
+
+        GatherValidPositions();
+        StartSpawnLoopIfNeeded();
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Update()
     {
-        if(!tilemap.gameObject.activeInHierarchy)
+        if (tilemap == null || !tilemap.gameObject.activeInHierarchy)
         {
-            // level change
-            LevelChange();
+            Tilemap activeGround = FindActiveGround();
+            if (activeGround != null && activeGround != tilemap)
+            {
+                tilemap = activeGround;
+                LevelChange();
+            }
         }
-        if (!isSpawning && ActiveObjectCount() < maxObjects)
+
+        if (tilemap == null || !tilemap.gameObject.activeInHierarchy)
+            return;
+
+        StartSpawnLoopIfNeeded();
+    }
+
+    private Tilemap FindActiveGround()
+    {
+        return FindObjectsByType<Tilemap>(FindObjectsSortMode.None)
+            .FirstOrDefault(map => map.gameObject.name == "Ground" && map.gameObject.activeInHierarchy);
+    }
+
+    private void StartSpawnLoopIfNeeded()
+    {
+        if (!isSpawning && tilemap != null && tilemap.gameObject.activeInHierarchy &&
+            ActiveObjectCount() < maxObjects)
         {
-            StartCoroutine(SpawnObjectIfNeed());
+            StartCoroutine(SpawnObjectIfNeeded());
         }
     }
 
     private void LevelChange()
     {
-        tilemap = GameObject.Find("Ground").GetComponent<Tilemap>();
-        GatherValidPositions();
+        StopAllCoroutines();
+        isSpawning = false;
         DestroyAllSpawnedObjects();
+
+        Tilemap activeGround = FindActiveGround();
+        if (activeGround != null)
+            tilemap = activeGround;
+
+        GatherValidPositions();
+        StartSpawnLoopIfNeeded();
     }
 
     private int ActiveObjectCount()
     {
-        // Remove any null references from the list
         spawnedObjects.RemoveAll(item => item == null);
         return spawnedObjects.Count;
     }
 
-    private IEnumerator SpawnObjectIfNeed()
+    private IEnumerator SpawnObjectIfNeeded()
     {
         isSpawning = true;
-        while (ActiveObjectCount() < maxObjects)
+        while (tilemap != null && tilemap.gameObject.activeInHierarchy &&
+               ActiveObjectCount() < maxObjects && validSpawnPositions.Count > 0)
         {
             SpawnObject();
             yield return new WaitForSeconds(spawnInterval);
@@ -68,107 +107,175 @@ public class ObjectSpawner : MonoBehaviour
 
     private ObjectType RandomObjectType()
     {
-        float randomValue = Random.value;
-        if (randomValue <= enemyProbability)
-        {
-            return ObjectType.Enemy;
-        }
-        else if (randomValue <= ( enemyProbability + bananaProbability))
-        {
-            return ObjectType.Fruit;
-        }
-        else
-        {
-            return ObjectType.Fruit; // Default to fruit if no other type is selected
-        }
+        return Random.value <= enemyProbability ? ObjectType.Enemy : ObjectType.Fruit;
     }
 
     private void SpawnObject()
     {
-        if (validSpawnPositions.Count == 0)
+        if (objectPrefabs == null || objectPrefabs.Length <= (int)ObjectType.Fruit)
         {
-            Debug.LogWarning("No valid spawn positions available.");
+            Debug.LogError("ObjectSpawner needs an Enemy prefab at index 0 and a Fruit prefab at index 1.", this);
             return;
         }
-        Vector3 spawnPosition = Vector3.zero;
-        bool validPositionFound = false;
 
-        while(!validPositionFound && validSpawnPositions.Count > 0)
+        Transform player = GameObject.FindGameObjectWithTag("Player")?.transform;
+        ObjectType objectType = RandomObjectType();
+        GameObject prefab = objectPrefabs[(int)objectType];
+        if (prefab == null)
         {
-            int randomIndex = Random.Range(0, validSpawnPositions.Count);
-            Vector3 potentialPosition = validSpawnPositions[randomIndex];
-            Vector3 leftPosition = potentialPosition + Vector3.left;
-            Vector3 rightPosition = potentialPosition + Vector3.right;
-
-            if (!PositionHasObject(leftPosition) && !PositionHasObject(rightPosition))
-            {
-                spawnPosition = potentialPosition;
-                validPositionFound = true;
-            }
-            else
-            {
-                validSpawnPositions.RemoveAt(randomIndex);
-            }
+            Debug.LogError($"ObjectSpawner prefab at index {(int)objectType} is not assigned.", this);
+            return;
         }
 
-        if (validPositionFound)
-        {
-            ObjectType objectType = RandomObjectType();
-            GameObject gameObject = Instantiate(objectPrefabs[(int)objectType], spawnPosition, Quaternion.identity);
-            spawnedObjects.Add(gameObject);
+        List<int> candidateIndices = Enumerable.Range(0, validSpawnPositions.Count)
+            .OrderBy(_ => Random.value).ToList();
 
-            // Destroy fruit after time
-            if(objectType != ObjectType.Enemy)
-            {
-                StartCoroutine(DestroyObjectAfterTime(gameObject, fruitLifeTime));
-            }
+        foreach (int candidateIndex in candidateIndices)
+        {
+            Vector3 surfacePosition = validSpawnPositions[candidateIndex];
+            float objectHalfHeight = objectType == ObjectType.Enemy ? enemyHalfHeight : fruitHalfHeight;
+            float objectHalfWidth = objectType == ObjectType.Enemy ? 0.4f : 0.25f;
+            Vector3 spawnPosition = surfacePosition + Vector3.up * (objectHalfHeight + surfacePadding);
+            if (player != null && Vector2.Distance(player.position, spawnPosition) < playerClearance)
+                continue;
+            if (IsInsideNoSpawnArea(spawnPosition, objectHalfWidth, objectHalfHeight))
+                continue;
+            if (PositionHasObject(spawnPosition))
+                continue;
+
+            validSpawnPositions.RemoveAt(candidateIndex);
+            GameObject spawnedObject = Instantiate(prefab, spawnPosition, Quaternion.identity);
+            spawnedObjects.Add(spawnedObject);
+
+            if (objectType == ObjectType.Fruit)
+                StartCoroutine(DestroyObjectAfterTime(spawnedObject, surfacePosition, fruitLifeTime));
+
+            return;
         }
     }
 
-    private IEnumerator DestroyObjectAfterTime(GameObject gameObject, float time)
+    private IEnumerator DestroyObjectAfterTime(GameObject spawnedObject, Vector3 originalPosition, float time)
     {
         yield return new WaitForSeconds(time);
-        if (gameObject)
+        if (spawnedObject != null)
         {
-            spawnedObjects.Remove(gameObject);
-            validSpawnPositions.Add(gameObject.transform.position);
-            Destroy(gameObject);
+            spawnedObjects.Remove(spawnedObject);
+            Destroy(spawnedObject);
         }
+
+        if (!validSpawnPositions.Any(position => Vector3.Distance(position, originalPosition) < 0.1f))
+            validSpawnPositions.Add(originalPosition);
     }
 
     private void DestroyAllSpawnedObjects()
     {
-        foreach (GameObject obj in spawnedObjects)
+        foreach (GameObject spawnedObject in spawnedObjects)
         {
-            if (obj)
-            {
-                Destroy(obj);
-            }
+            if (spawnedObject != null)
+                Destroy(spawnedObject);
         }
         spawnedObjects.Clear();
     }
-    private bool PositionHasObject(Vector3 positionToCheck)
+
+    private bool PositionHasObject(Vector3 position)
     {
-        return spawnedObjects.Any(checkObj => checkObj && Vector3.Distance(checkObj.transform.position, positionToCheck) < 1.0f);
+        return spawnedObjects.Any(spawnedObject => spawnedObject != null &&
+            Vector2.Distance(spawnedObject.transform.position, position) < objectClearance);
     }
+
     public void GatherValidPositions()
     {
         validSpawnPositions.Clear();
-        BoundsInt boundsInt = tilemap.cellBounds;
-        TileBase[] allTiles = tilemap.GetTilesBlock(boundsInt);
-        Vector3 start = tilemap.CellToWorld(new Vector3Int(boundsInt.xMin, boundsInt.yMin, 0));
-
-        for(int x = 0; x < boundsInt.size.x; x++)
+        noSpawnColliders.Clear();
+        if (tilemap == null)
         {
-            for(int y = 0; y < boundsInt.size.y; y++)
+            Debug.LogWarning("ObjectSpawner has no active Ground Tilemap.", this);
+            return;
+        }
+
+        RefreshNoSpawnColliders();
+
+        BoundsInt bounds = tilemap.cellBounds;
+        for (int x = bounds.xMin; x < bounds.xMax; x++)
+        {
+            for (int y = bounds.yMin; y < bounds.yMax; y++)
             {
-                TileBase tile = allTiles[x + y * boundsInt.size.x];
-                if(tile != null)
+                for (int z = bounds.zMin; z < bounds.zMax; z++)
                 {
-                    Vector3 place = start + new Vector3(x + 0.5f, y + 2f, 0);
-                    validSpawnPositions.Add(place);
+                    Vector3Int cell = new Vector3Int(x, y, z);
+                    if (!tilemap.HasTile(cell) || tilemap.HasTile(cell + Vector3Int.up))
+                        continue;
+
+                    Vector3 cellBottom = tilemap.CellToWorld(cell);
+                    Vector3 surfacePosition = cellBottom + new Vector3(0.5f, 1f, 0f);
+                    if (!IsInsideNoSpawnArea(surfacePosition, 0f, 0f))
+                        validSpawnPositions.Add(surfacePosition);
                 }
             }
         }
+    }
+
+    private void RefreshNoSpawnColliders()
+    {
+        Transform levelRoot = FindContainingLevelRoot();
+
+        foreach (Transform child in levelRoot.GetComponentsInChildren<Transform>(true))
+        {
+            if (child.name != noSpawnObjectName || !child.gameObject.activeInHierarchy)
+                continue;
+
+            foreach (Collider2D areaCollider in child.GetComponentsInChildren<Collider2D>())
+            {
+                if (areaCollider.enabled && !noSpawnColliders.Contains(areaCollider))
+                    noSpawnColliders.Add(areaCollider);
+            }
+        }
+    }
+
+    private Transform FindContainingLevelRoot()
+    {
+        GameController gameController = FindFirstObjectByType<GameController>();
+        if (gameController != null && gameController.levels != null)
+        {
+            foreach (GameObject level in gameController.levels)
+            {
+                if (level != null && (tilemap.transform == level.transform ||
+                                      tilemap.transform.IsChildOf(level.transform)))
+                {
+                    return level.transform;
+                }
+            }
+        }
+
+        for (Transform current = tilemap.transform; current != null; current = current.parent)
+        {
+            if (current.name.StartsWith("Level", System.StringComparison.OrdinalIgnoreCase))
+                return current;
+        }
+
+        return tilemap.transform.root;
+    }
+
+    private bool IsInsideNoSpawnArea(Vector3 position, float halfWidth, float halfHeight)
+    {
+        noSpawnColliders.RemoveAll(areaCollider => areaCollider == null || !areaCollider.enabled ||
+                                                   !areaCollider.gameObject.activeInHierarchy);
+
+        foreach (Collider2D areaCollider in noSpawnColliders)
+        {
+            Bounds bounds = areaCollider.bounds;
+            bool overlapsHorizontalRange = position.x + halfWidth >= bounds.min.x &&
+                                           position.x - halfWidth <= bounds.max.x;
+            bool isAtOrAboveCollider = position.y + halfHeight >= bounds.min.y;
+            if (overlapsHorizontalRange && isAtOrAboveCollider)
+                return true;
+        }
+
+        return false;
+    }
+
+    private void OnDestroy()
+    {
+        GameController.OnReset -= LevelChange;
     }
 }

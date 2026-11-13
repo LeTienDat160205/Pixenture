@@ -13,6 +13,7 @@ public class GameController : MonoBehaviour
     public GameObject LoadCanvas;
     public List<GameObject> levels;
     private int currentLevelIndex;
+    private bool checkpointTransitionInProgress;
 
     public GameObject gameOverScreen;
     public TMP_Text survivedText;
@@ -22,22 +23,25 @@ public class GameController : MonoBehaviour
 
     private void Start()
     {
+        ResolveMissingLevels();
         processAmount = 0;
         if (processSlider != null) processSlider.value = 0;
 
         Fruit.OnFuitCollect -= IncreaseProcessAmount;
         Fruit.OnFuitCollect += IncreaseProcessAmount;
-        HoldToLoadLevel.OnHoldComplete -= LoadNextLevel;
-        HoldToLoadLevel.OnHoldComplete += LoadNextLevel;
         PlayerHealth.OnPlayedDied -= GameOverScreen;
         PlayerHealth.OnPlayedDied += GameOverScreen;
 
         if (LoadCanvas != null) LoadCanvas.SetActive(false);
         if (gameOverScreen != null) gameOverScreen.SetActive(false);
 
-        // Đồng bộ chỉ số với level đang active khi khởi tạo.
         int activeIndex = FindActiveLevelIndex();
-        if (activeIndex >= 0) currentLevelIndex = activeIndex;
+        currentLevelIndex = activeIndex >= 0 ? activeIndex : 0;
+        if (levels != null && levels.Count > 0 && levels[currentLevelIndex] != null)
+        {
+            SetActiveLevel(currentLevelIndex);
+            PlacePlayerAtLevelStart(currentLevelIndex);
+        }
     }
 
     private void GameOverScreen()
@@ -52,39 +56,75 @@ public class GameController : MonoBehaviour
     public void ResetGame()
     {
         Time.timeScale = 1f;
+        checkpointTransitionInProgress = false;
+        if (LoadCanvas != null)
+        {
+            LoadCanvas.GetComponent<HoldToLoadLevel>()?.CancelLoading();
+            LoadCanvas.SetActive(false);
+        }
         if (gameOverScreen != null) gameOverScreen.SetActive(false);
         MusicManager.PlayBackgroundMusic(false);
         survivedLevelCount = 0;
         if (!SetActiveLevel(0)) return;
         ResetLevelProgress();
-        if (player != null) player.transform.position = Vector3.zero;
-        if (LoadCanvas != null) LoadCanvas.SetActive(false);
+        PlacePlayerAtLevelStart(0);
 
         OnReset?.Invoke();
     }
 
     private void IncreaseProcessAmount(int amount)
     {
-        processAmount += amount;
+        if (checkpointTransitionInProgress) return;
+
+        processAmount = Mathf.Clamp(processAmount + amount, 0, 100);
         if (processSlider != null) processSlider.value = processAmount;
-        if (processAmount >= 100 && LoadCanvas != null)
+    }
+
+    public bool TryBeginCheckpointTransition(CheckpointController checkpoint)
+    {
+        bool processIsFull = processAmount >= 100 ||
+                             (processSlider != null && processSlider.value >= processSlider.maxValue);
+        if (checkpoint == null || !processIsFull || checkpointTransitionInProgress)
+            return false;
+
+        if (LoadCanvas == null || !LoadCanvas.TryGetComponent(out HoldToLoadLevel loadCircle))
         {
-            LoadCanvas.SetActive(true);
-            Debug.Log("Level Up!");
+            Debug.LogError("GameController needs HoldToLoadLevel on LoadCanvas.", this);
+            return false;
         }
+
+        checkpointTransitionInProgress = true;
+        float animationDuration = checkpoint.PlayActivationAnimation();
+        LoadCanvas.SetActive(true);
+        if (!loadCircle.BeginLoading(animationDuration, LoadNextLevel))
+        {
+            checkpointTransitionInProgress = false;
+            LoadCanvas.SetActive(false);
+            return false;
+        }
+        return true;
     }
 
     private void LoadLevel(int level, bool wantSurvivedIncrease)
     {
-        if (!SetActiveLevel(level)) return;
+        if (!SetActiveLevel(level))
+        {
+            checkpointTransitionInProgress = false;
+            return;
+        }
+
+        checkpointTransitionInProgress = false;
+        if (LoadCanvas != null)
+        {
+            LoadCanvas.GetComponent<HoldToLoadLevel>()?.CancelLoading();
+            LoadCanvas.SetActive(false);
+        }
 
         if (wantSurvivedIncrease) SoundEffectManager.Play("LevelComplete");
 
-        if (LoadCanvas != null) LoadCanvas.SetActive(false);
-        if (player != null) player.transform.position = Vector3.zero;
+        PlacePlayerAtLevelStart(level);
         ResetLevelProgress();
 
-        survivedLevelCount++;
         if (wantSurvivedIncrease) survivedLevelCount++;
     }
 
@@ -107,6 +147,61 @@ public class GameController : MonoBehaviour
         return true;
     }
 
+    private void ResolveMissingLevels()
+    {
+        if (levels == null) return;
+
+        Transform[] sceneTransforms = FindObjectsByType<Transform>(
+            FindObjectsInactive.Include, FindObjectsSortMode.None);
+        for (int i = 0; i < levels.Count; i++)
+        {
+            if (levels[i] != null) continue;
+
+            string expectedName = $"Level{i + 1}";
+            foreach (Transform sceneTransform in sceneTransforms)
+            {
+                if (sceneTransform.name == expectedName)
+                {
+                    levels[i] = sceneTransform.gameObject;
+                    break;
+                }
+            }
+        }
+    }
+
+    private void PlacePlayerAtLevelStart(int levelIndex)
+    {
+        if (player == null || levels == null || levelIndex < 0 || levelIndex >= levels.Count ||
+            levels[levelIndex] == null)
+            return;
+
+        Transform startPoint = null;
+        foreach (Transform child in levels[levelIndex].GetComponentsInChildren<Transform>(true))
+        {
+            if (child.name == "Start")
+            {
+                startPoint = child;
+                break;
+            }
+        }
+
+        if (startPoint == null)
+        {
+            Debug.LogWarning($"{levels[levelIndex].name} has no child object named Start.", levels[levelIndex]);
+            return;
+        }
+
+        Rigidbody2D body = player.GetComponent<Rigidbody2D>();
+        if (body != null)
+        {
+            body.linearVelocity = Vector2.zero;
+            body.angularVelocity = 0f;
+            body.position = startPoint.position;
+        }
+
+        player.transform.position = startPoint.position;
+    }
+
     private void ResetLevelProgress()
     {
         processAmount = 0;
@@ -125,7 +220,7 @@ public class GameController : MonoBehaviour
 
     private void LoadNextLevel()
     {
-        if (levels == null || levels.Count == 0) return;
+        if (!checkpointTransitionInProgress || levels == null || levels.Count == 0) return;
         int nextLevelIndex = (currentLevelIndex + 1) % levels.Count;
         LoadLevel(nextLevelIndex, true);
     }
@@ -133,7 +228,6 @@ public class GameController : MonoBehaviour
     private void OnDestroy()
     {
         Fruit.OnFuitCollect -= IncreaseProcessAmount;
-        HoldToLoadLevel.OnHoldComplete -= LoadNextLevel;
         PlayerHealth.OnPlayedDied -= GameOverScreen;
     }
 }

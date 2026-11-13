@@ -1,55 +1,68 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
+/// <summary>Fills the player's circle for the supplied duration, then signals level load.</summary>
 public class HoldToLoadLevel : MonoBehaviour
 {
-    public float holdDuration = 1f;
-    public Image fillCircle;
+    [SerializeField] private Image fillCircle;
 
-    private float holdTimer = 0f;
-    private bool isHolding = false;
+    private Coroutine loadRoutine;
+    private Action onLoadComplete;
 
-    public static event Action OnHoldComplete;
-
-    // Update is called once per frame
-    void Update()
+    public bool BeginLoading(float duration, Action completed)
     {
-        if (isHolding)
+        CancelLoading();
+        if (fillCircle == null)
         {
-            holdTimer += Time.deltaTime;
-            fillCircle.fillAmount = holdTimer / holdDuration;
-            if (holdTimer >= holdDuration)
-            {
-                // Load the next level
-                OnHoldComplete.Invoke();
-                ResetHold();
-            }
+            Debug.LogError("HoldToLoadLevel needs a Fill Circle Image.", this);
+            return false;
         }
-        else
-        {
-            holdTimer = 0f;
-            fillCircle.fillAmount = 0f;
-        }
+
+        onLoadComplete = completed;
+        loadRoutine = StartCoroutine(FillForDuration(Mathf.Max(0.01f, duration)));
+        return true;
     }
 
-    public void OnHold(InputAction.CallbackContext context)
+    private IEnumerator FillForDuration(float duration)
     {
-        if (context.started)
-        {
-            isHolding = true;
-        }
-        else if (context.canceled)
-        {
-            ResetHold();
-        }
-    }
-
-    private void ResetHold()
-    {
-        isHolding = false;
-        holdTimer = 0f;
+        float elapsed = 0f;
         fillCircle.fillAmount = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            fillCircle.fillAmount = Mathf.Clamp01(elapsed / duration);
+            yield return null;
+        }
+
+        fillCircle.fillAmount = 1f;
+        loadRoutine = null;
+        Action completed = onLoadComplete;
+        onLoadComplete = null;
+        completed?.Invoke();
+    }
+
+    public void CancelLoading()
+    {
+        if (loadRoutine != null)
+        {
+            StopCoroutine(loadRoutine);
+            loadRoutine = null;
+        }
+
+        onLoadComplete = null;
+        if (fillCircle != null)
+            fillCircle.fillAmount = 0f;
+    }
+
+    // Kept so the existing Player Input event remains valid; E no longer starts loading.
+    public void OnHold(InputAction.CallbackContext context) { }
+
+    private void OnDisable()
+    {
+        CancelLoading();
     }
 }
