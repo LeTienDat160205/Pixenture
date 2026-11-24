@@ -13,6 +13,7 @@ public class GameController : MonoBehaviour
     public GameObject LoadCanvas;
     public List<GameObject> levels;
     private int currentLevelIndex;
+    public int CurrentLevelIndex => currentLevelIndex;
     private bool checkpointTransitionInProgress;
 
     public GameObject gameOverScreen;
@@ -35,8 +36,11 @@ public class GameController : MonoBehaviour
         if (LoadCanvas != null) LoadCanvas.SetActive(false);
         if (gameOverScreen != null) gameOverScreen.SetActive(false);
 
+        int savedLevelIndex = PlayerPrefs.GetInt(LevelManager.SelectedLevelKey, -1);
         int activeIndex = FindActiveLevelIndex();
-        currentLevelIndex = activeIndex >= 0 ? activeIndex : 0;
+        currentLevelIndex = savedLevelIndex >= 0 && savedLevelIndex < levels.Count
+            ? savedLevelIndex
+            : activeIndex >= 0 ? activeIndex : 0;
         if (levels != null && levels.Count > 0 && levels[currentLevelIndex] != null)
         {
             SetActiveLevel(currentLevelIndex);

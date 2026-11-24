@@ -19,6 +19,8 @@ public class MusicManager : MonoBehaviour
         }
         else
         {
+            if (backgroundMusic != null)
+                PlayBackgroundMusic(false, backgroundMusic);
             Destroy(gameObject);
         }
     }
@@ -43,16 +45,18 @@ public class MusicManager : MonoBehaviour
     {
         if (Instance == null || Instance.audioSource == null) return;
 
-        if (audioClip != null)
+        bool clipChanged = audioClip != null && Instance.audioSource.clip != audioClip;
+        if (clipChanged)
             Instance.audioSource.clip = audioClip;
 
         if (Instance.audioSource.clip == null) return;
 
-        if (resetSong || !Instance.audioSource.isPlaying)
-            Instance.audioSource.Stop();
-
         Instance.audioSource.loop = true;
-        Instance.audioSource.Play();
+        if (resetSong || clipChanged || !Instance.audioSource.isPlaying)
+        {
+            Instance.audioSource.Stop();
+            Instance.audioSource.Play();
+        }
     }
 
     public static void PauseBackgroundMusic()
